@@ -21,6 +21,7 @@ CURRENCY_MAP = {
     "CAD": "CA$",
     "AUD": "A$",
     "CNY": "CN¥",
+    "SGD": "S$",
 }
 
 
@@ -49,7 +50,7 @@ def search_yahoo_finance(query: str):
 
 st.title("📈 Options Yield & Income Calculator (Pro)")
 st.caption(
-    "Calculate gross vs. net annualized returns with dynamic multi-currency stock fetching."
+    "Calculate gross vs. net annualized returns with dynamic multi-currency stock fetching and customizable broker fee currency."
 )
 
 st.divider()
@@ -74,24 +75,24 @@ else:
 
 # Robust Multi-Layer Price & Currency Fetcher
 live_price = 100.0
-currency_code = "USD"
+stock_currency = "USD"
 price_fetched = False
 
 if selected_symbol:
     try:
         ticker_obj = yf.Ticker(selected_symbol)
 
-        # 1. Fetch Currency
+        # 1. Fetch Stock Currency
         try:
             raw_curr = ticker_obj.fast_info.get(
                 "currency"
             ) or ticker_obj.info.get("currency")
             if raw_curr:
-                currency_code = str(raw_curr).upper()
+                stock_currency = str(raw_curr).upper()
         except Exception:
-            currency_code = "USD"
+            stock_currency = "USD"
 
-        # 2. Fetch Price (Method A: fast_info)
+        # 2. Fetch Stock Price
         try:
             price_val = ticker_obj.fast_info.get(
                 "lastPrice"
@@ -102,14 +103,12 @@ if selected_symbol:
         except Exception:
             pass
 
-        # Method B: Recent History (Most reliable for HK / International stocks)
         if not price_fetched:
             hist = ticker_obj.history(period="5d")
             if not hist.empty:
                 live_price = float(hist["Close"].iloc[-1])
                 price_fetched = True
 
-        # Method C: info dictionary fallback
         if not price_fetched:
             info_price = ticker_obj.info.get(
                 "currentPrice"
@@ -121,7 +120,7 @@ if selected_symbol:
     except Exception:
         pass
 
-curr_sym = CURRENCY_MAP.get(currency_code, f"{currency_code} ")
+stock_curr_sym = CURRENCY_MAP.get(stock_currency, f"{stock_currency} ")
 
 if not price_fetched and selected_symbol:
     st.sidebar.warning(
@@ -129,7 +128,7 @@ if not price_fetched and selected_symbol:
     )
 
 current_price = st.sidebar.number_input(
-    f"Stock Price ({currency_code}) [Auto-Fetched / Editable]",
+    f"Stock Price ({stock_currency}) [Auto-Fetched / Editable]",
     value=round(live_price, 2),
     step=0.5,
     min_value=0.01,
@@ -138,13 +137,13 @@ current_price = st.sidebar.number_input(
 st.sidebar.divider()
 st.sidebar.header("2. Option Contract Details")
 strike_price = st.sidebar.number_input(
-    f"Short Put Strike Price ({currency_code})",
+    f"Short Put Strike Price ({stock_currency})",
     value=round(current_price * 0.95, 2),
     step=0.5,
     min_value=0.01,
 )
 premium = st.sidebar.number_input(
-    f"Option Premium Collected ({currency_code}/share)",
+    f"Option Premium Collected ({stock_currency}/share)",
     value=round(current_price * 0.025, 2),
     step=0.05,
     min_value=0.01,
@@ -158,28 +157,78 @@ contract_count = st.sidebar.number_input(
 
 st.sidebar.divider()
 st.sidebar.header("3. Broker Commission Deductions")
-comm_per_contract = st.sidebar.number_input(
-    f"Commission per Contract ({currency_code})",
-    value=15.0 if currency_code == "HKD" else 0.65,
-    step=0.50 if currency_code == "HKD" else 0.05,
-    min_value=0.00,
-    help="Standard options fee per contract",
+
+# Broker Home Currency Selection
+broker_currency = st.sidebar.selectbox(
+    "Select Your Broker Account Currency:",
+    options=[
+        "USD",
+        "HKD",
+        "EUR",
+        "GBP",
+        "CAD",
+        "AUD",
+        "SGD",
+        "JPY",
+        "TWD",
+        "CNY",
+    ],
+    index=0,
+    help="The currency your broker charges you for commission fees.",
 )
+
+broker_curr_sym = CURRENCY_MAP.get(broker_currency, f"{broker_currency} ")
+
+# Exchange Rate Handling
+fx_rate = 1.0  # Default 1:1 if currencies match
+if broker_currency != stock_currency:
+    try:
+        fx_pair = f"{broker_currency}{stock_currency}=X"
+        fx_ticker = yf.Ticker(fx_pair)
+        fetched_fx = fx_ticker.fast_info.get(
+            "lastPrice"
+        ) or fx_ticker.fast_info.get("previousClose")
+        if fetched_fx and not np.isnan(fetched_fx):
+            fx_rate = float(fetched_fx)
+    except Exception:
+        pass
+
+    fx_rate = st.sidebar.number_input(
+        f"FX Rate (1 {broker_currency} = ? {stock_currency})",
+        value=round(fx_rate, 4),
+        step=0.01,
+        format="%.4f",
+        help=f"Auto-fetched live rate to convert {broker_currency} fees into {stock_currency}.",
+    )
+
+comm_per_contract = st.sidebar.number_input(
+    f"Commission per Contract ({broker_currency})",
+    value=0.65 if broker_currency == "USD" else 15.00,
+    step=0.05 if broker_currency == "USD" else 0.50,
+    min_value=0.00,
+    help=f"Fee in your broker's native currency ({broker_currency})",
+)
+
 flat_ticket_fee = st.sidebar.number_input(
-    f"Flat Base Fee per Trade ({currency_code})",
+    f"Flat Base Fee per Trade ({broker_currency})",
     value=0.00,
     step=0.50,
     min_value=0.00,
 )
 
 # Core Financial Calculations
-total_commissions = (
+# Round-trip commission in Broker Currency
+total_comm_broker_curr = (
     comm_per_contract * contract_count * 2
 ) + flat_ticket_fee
+
+# Convert commission to Stock Currency for net trade P&L
+total_comm_stock_curr = total_comm_broker_curr * fx_rate
+
 collateral = strike_price * 100 * contract_count
 
 gross_income = premium * 100 * contract_count
-net_income = gross_income - total_commissions
+net_income = gross_income - total_comm_stock_curr
 
 gross_roc = (premium / strike_price) * 100
 net_roc = (net_income / collateral) * 100 if collateral > 0 else 0
@@ -192,7 +241,7 @@ net_breakeven = strike_price - (net_income / (100 * contract_count))
 downside_buffer = ((current_price - net_breakeven) / current_price) * 100
 
 # Top KPI Metric Cards: Gross vs Net Comparison
-st.subheader(f"1. Trade Health & Return Profile ({currency_code})")
+st.subheader(f"1. Trade Health & Return Profile ({stock_currency})")
 
 if net_aroc >= 15 and downside_buffer >= 5:
     st.success(
@@ -215,15 +264,23 @@ kpi1.metric(
 )
 kpi2.metric(
     "Net Breakeven Price",
-    f"{curr_sym}{net_breakeven:.2f}",
-    f"Gross: {curr_sym}{gross_breakeven:.2f}",
+    f"{stock_curr_sym}{net_breakeven:.2f}",
+    f"Gross: {stock_curr_sym}{gross_breakeven:.2f}",
 )
 kpi3.metric("Downside Safety Buffer", f"{downside_buffer:.2f}%")
-kpi4.metric(
-    "Total Fees & Commissions",
-    f"{curr_sym}{total_commissions:.2f}",
-    f"{curr_sym}{comm_per_contract}/contract",
-)
+
+if broker_currency != stock_currency:
+    kpi4.metric(
+        "Total Fees & Commissions",
+        f"{broker_curr_sym}{total_comm_broker_curr:.2f}",
+        f"≈ {stock_curr_sym}{total_comm_stock_curr:.2f} ({stock_currency})",
+    )
+else:
+    kpi4.metric(
+        "Total Fees & Commissions",
+        f"{broker_curr_sym}{total_comm_broker_curr:.2f}",
+        f"{broker_curr_sym}{comm_per_contract}/contract",
+    )
 
 st.divider()
 
@@ -239,7 +296,7 @@ net_pnl_values = (
         (price_range - strike_price) * 100 * contract_count + gross_income,
         gross_income,
     )
-    - total_commissions
+    - total_comm_stock_curr
 )
 
 fig = go.Figure()
@@ -261,28 +318,28 @@ fig.add_vline(
     x=current_price,
     line_dash="dot",
     line_color="#636EFA",
-    annotation_text=f"Current: {curr_sym}{current_price:.2f}",
+    annotation_text=f"Current: {stock_curr_sym}{current_price:.2f}",
     annotation_position="top left",
 )
 fig.add_vline(
     x=strike_price,
     line_dash="dot",
     line_color="#FFA15A",
-    annotation_text=f"Strike: {curr_sym}{strike_price:.2f}",
+    annotation_text=f"Strike: {stock_curr_sym}{strike_price:.2f}",
     annotation_position="top right",
 )
 fig.add_vline(
     x=net_breakeven,
     line_dash="dot",
     line_color="#EF553B",
-    annotation_text=f"Net Breakeven: {curr_sym}{net_breakeven:.2f}",
+    annotation_text=f"Net Breakeven: {stock_curr_sym}{net_breakeven:.2f}",
     annotation_position="bottom left",
 )
 
 fig.update_layout(
-    title=f"Net Profit / Loss ({currency_code}) vs. Stock Price at Expiration",
-    xaxis_title=f"Stock Price at Expiration ({currency_code})",
-    yaxis_title=f"Net Profit / Loss ({currency_code})",
+    title=f"Net Profit / Loss ({stock_currency}) vs. Stock Price at Expiration",
+    xaxis_title=f"Stock Price at Expiration ({stock_currency})",
+    yaxis_title=f"Net Profit / Loss ({stock_currency})",
     template="plotly_dark",
     height=450,
 )
@@ -297,7 +354,7 @@ st.subheader("3. Trade Log & Export Summary")
 summary_data = {
     "Metric / Parameter": [
         "Selected Ticker Symbol",
-        "Currency Code",
+        "Stock Currency",
         "Current Stock Price",
         "Strike Price",
         "Premium Collected (per share)",
@@ -305,7 +362,9 @@ summary_data = {
         "Contract Count",
         "Required Collateral",
         "Gross Upfront Income",
-        "Total Broker Commissions",
+        "Broker Fee Currency",
+        "Total Broker Commissions (Native)",
+        "Converted Commissions (Stock Curr)",
         "Net Upfront Income",
         "Gross Annualized Return (AROC)",
         "Net Annualized Return (AROC)",
@@ -314,19 +373,21 @@ summary_data = {
     ],
     "Value": [
         selected_symbol,
-        currency_code,
-        f"{curr_sym}{current_price:.2f}",
-        f"{curr_sym}{strike_price:.2f}",
-        f"{curr_sym}{premium:.2f}",
+        stock_currency,
+        f"{stock_curr_sym}{current_price:.2f}",
+        f"{stock_curr_sym}{strike_price:.2f}",
+        f"{stock_curr_sym}{premium:.2f}",
         f"{dte} days",
         f"{contract_count}",
-        f"{curr_sym}{collateral:,.2f}",
-        f"{curr_sym}{gross_income:,.2f}",
-        f"{curr_sym}{total_commissions:.2f}",
-        f"{curr_sym}{net_income:,.2f}",
+        f"{stock_curr_sym}{collateral:,.2f}",
+        f"{stock_curr_sym}{gross_income:,.2f}",
+        broker_currency,
+        f"{broker_curr_sym}{total_comm_broker_curr:.2f}",
+        f"{stock_curr_sym}{total_comm_stock_curr:.2f}",
+        f"{stock_curr_sym}{net_income:,.2f}",
         f"{gross_aroc:.2f}%",
         f"{net_aroc:.2f}%",
-        f"{curr_sym}{net_breakeven:.2f}",
+        f"{stock_curr_sym}{net_breakeven:.2f}",
         f"{downside_buffer:.2f}%",
     ],
 }
@@ -340,15 +401,13 @@ with col_tbl:
 
 with col_dl:
     st.markdown("### Export Trade Data")
-    st.write(
-        "Download this trade setup as a clean CSV file to track your portfolio or backtest history."
-    )
+    st.write("Download this trade setup as a clean CSV file.")
 
     csv_data = summary_df.to_csv(index=False).encode("utf-8")
 
     st.download_button(
         label="📥 Download CSV Summary",
         data=csv_data,
-        file_name=f"short_put_{selected_symbol}_{dte}DTE_{currency_code}.csv",
+        file_name=f"short_put_{selected_symbol}_{dte}DTE_{stock_currency}.csv",
         mime="text/csv",
     )
