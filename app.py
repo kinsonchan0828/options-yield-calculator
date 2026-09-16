@@ -1,174 +1,295 @@
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+import requests
 import streamlit as st
+import yfinance as yf
 
+# Page Configuration
 st.set_page_config(
-    page_title="Short Put Option Calculator", page_icon="📉", layout="wide"
+    page_title="Options Yield & Income Calculator", page_icon="📈", layout="wide"
 )
 
-st.title("📉 Short Put Option Strategy Calculator (Baseline)")
-st.markdown(
-    "Interactive payoff analysis and return profile for cash-secured short put options."
+
+# Helper function to search Yahoo Finance for tickers
+def search_yahoo_finance(query: str):
+    if not query or len(query.strip()) == 0:
+        return []
+    url = f"https://query2.finance.yahoo.com/1/finance/search?q={query}&quotesCount=5"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        res = requests.get(url, headers=headers, timeout=3)
+        if res.status_code == 200:
+            data = res.json()
+            matches = []
+            for item in data.get("quotes", []):
+                if item.get("quoteType") in ["EQUITY", "ETF"]:
+                    symbol = item.get("symbol")
+                    name = item.get("shortname") or item.get("longname") or symbol
+                    exchange = item.get("exchDisp") or ""
+                    matches.append((f"{symbol} - {name} ({exchange})", symbol))
+            return matches
+    except Exception:
+        pass
+    return []
+
+
+st.title("📈 Options Yield & Income Calculator (Pro)")
+st.caption(
+    "Calculate gross vs. net annualized returns, live stock prices, commission drag, and export trade logs."
 )
 
-# ---------------------------------------------------------
-# Sidebar Inputs
-# ---------------------------------------------------------
-st.sidebar.header("Trade Inputs")
+st.divider()
 
-stock_price = st.sidebar.number_input(
-    "Current Stock Price ($)",
+# Sidebar: Inputs & Controls
+st.sidebar.header("1. Stock Search & Live Data")
+search_query = st.sidebar.text_input(
+    "Search Company or Ticker:",
+    value="NVDA",
+    help="Type name (e.g. Tencent, Apple) or ticker (e.g. AAPL, 700, TSLA)",
+)
+
+search_results = search_yahoo_finance(search_query)
+
+if search_results:
+    selected_label = st.sidebar.selectbox(
+        "Select Matching Asset:", [r[0] for r in search_results]
+    )
+    selected_symbol = dict(search_results)[selected_label]
+else:
+    selected_symbol = search_query.strip().upper()
+
+# Fetch live stock price
+live_price = 100.0
+if selected_symbol:
+    try:
+        ticker_obj = yf.Ticker(selected_symbol)
+        price_val = ticker_obj.fast_info.get(
+            "lastPrice"
+        ) or ticker_obj.fast_info.get("previousClose")
+        if price_val and not np.isnan(price_val):
+            live_price = float(price_val)
+    except Exception:
+        pass
+
+current_price = st.sidebar.number_input(
+    "Stock Price ($) [Auto-Fetched / Editable]",
+    value=round(live_price, 2),
+    step=0.5,
     min_value=0.01,
-    value=100.00,
-    step=1.00,
-    format="%.2f",
 )
 
+st.sidebar.divider()
+st.sidebar.header("2. Option Contract Details")
 strike_price = st.sidebar.number_input(
-    "Strike Price ($)",
+    "Short Put Strike Price ($)",
+    value=round(current_price * 0.95, 2),
+    step=0.5,
     min_value=0.01,
-    value=95.00,
-    step=1.00,
-    format="%.2f",
 )
-
 premium = st.sidebar.number_input(
-    "Option Premium Received ($/share)",
-    min_value=0.01,
-    value=2.50,
-    step=0.10,
-    format="%.2f",
+    "Option Premium Collected ($/share)", value=2.50, step=0.05, min_value=0.01
 )
-
 dte = st.sidebar.number_input(
-    "Days to Expiration (DTE)", min_value=1, value=30, step=1
+    "Days to Expiration (DTE)", value=30, step=1, min_value=1
+)
+contract_count = st.sidebar.number_input(
+    "Number of Contracts", value=1, step=1, min_value=1
 )
 
-num_contracts = st.sidebar.number_input(
-    "Number of Contracts", min_value=1, value=1, step=1
+st.sidebar.divider()
+st.sidebar.header("3. Broker Commission Deductions")
+comm_per_contract = st.sidebar.number_input(
+    "Commission per Contract ($)",
+    value=0.65,
+    step=0.05,
+    min_value=0.00,
+    help="Standard options fee (e.g. $0.65 for IBKR/Webull)",
+)
+flat_ticket_fee = st.sidebar.number_input(
+    "Flat Base Fee per Trade ($)",
+    value=0.00,
+    step=0.50,
+    min_value=0.00,
+    help="Optional ticket fee charged per order",
 )
 
-# ---------------------------------------------------------
-# Financial Calculations
-# ---------------------------------------------------------
-breakeven = strike_price - premium
-max_profit = premium * 100 * num_contracts
-cash_collateral = strike_price * 100 * num_contracts
-max_risk_net = (strike_price - premium) * 100 * num_contracts
+# Core Financial Calculations
+# Assuming round-trip (entry + exit/expiration fee)
+total_commissions = (
+    comm_per_contract * contract_count * 2
+) + flat_ticket_fee
+collateral = strike_price * 100 * contract_count
 
-roc = (max_profit / cash_collateral) * 100 if cash_collateral > 0 else 0.0
-annualized_roc = roc * (365 / dte) if dte > 0 else 0.0
+gross_income = premium * 100 * contract_count
+net_income = gross_income - total_commissions
 
-# ---------------------------------------------------------
-# Top KPI Metric Cards
-# ---------------------------------------------------------
-col1, col2, col3, col4, col5 = st.columns(5)
-col1.metric("Max Profit", f"${max_profit:,.2f}")
-col2.metric("Breakeven Price", f"${breakeven:,.2f}")
-col3.metric("Required Collateral", f"${cash_collateral:,.2f}")
-col4.metric("Return on Collateral (ROC)", f"{roc:.2f}%")
-col5.metric("Annualized ROC", f"{annualized_roc:.2f}%")
+gross_roc = (premium / strike_price) * 100
+net_roc = (net_income / collateral) * 100 if collateral > 0 else 0
 
-st.markdown("---")
+gross_aroc = gross_roc * (365 / dte)
+net_aroc = net_roc * (365 / dte)
 
-# ---------------------------------------------------------
-# Payoff Diagram (Plotly)
-# ---------------------------------------------------------
-s_min = max(0.0, min(stock_price, strike_price) * 0.7)
-s_max = max(stock_price, strike_price) * 1.3
-s_range = np.linspace(s_min, s_max, 500)
+gross_breakeven = strike_price - premium
+net_breakeven = strike_price - (net_income / (100 * contract_count))
+downside_buffer = ((current_price - net_breakeven) / current_price) * 100
 
-payoff_per_share = np.minimum(s_range - strike_price, 0) + premium
-total_payoff = payoff_per_share * 100 * num_contracts
+# Top KPI Metric Cards: Gross vs Net Comparison
+st.subheader("1. Trade Health & Return Profile")
+
+if net_aroc >= 15 and downside_buffer >= 5:
+    st.success(
+        "🟢 **High-Quality Setup:** Net yield exceeds 15% AROC with >5% downside buffer after fees."
+    )
+elif net_aroc >= 10 and downside_buffer >= 2:
+    st.warning(
+        "🟡 **Moderate Setup:** Acceptable yield, but commission drag or buffer warrants monitoring."
+    )
+else:
+    st.error(
+        "🔴 **Low Buffer / Low Yield:** Return after commissions does not compensate for assignment risk."
+    )
+
+kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+kpi1.metric(
+    "Net Annualized Return (AROC)",
+    f"{net_aroc:.2f}%",
+    f"Gross: {gross_aroc:.2f}%",
+)
+kpi2.metric(
+    "Net Breakeven Price",
+    f"${net_breakeven:.2f}",
+    f"Gross: ${gross_breakeven:.2f}",
+)
+kpi3.metric("Downside Safety Buffer", f"{downside_buffer:.2f}%")
+kpi4.metric(
+    "Total Fees & Commissions",
+    f"${total_commissions:.2f}",
+    f"${comm_per_contract}/contract",
+)
+
+st.divider()
+
+# Detailed Breakdown & Payoff Curve
+st.subheader("2. Net Payoff Curve at Expiration")
+
+price_range = np.linspace(
+    max(0.01, current_price * 0.7), current_price * 1.3, 200
+)
+net_pnl_values = (
+    np.where(
+        price_range < strike_price,
+        (price_range - strike_price) * 100 * contract_count + gross_income,
+        gross_income,
+    )
+    - total_commissions
+)
 
 fig = go.Figure()
 
-# Main Payoff Curve
+# Net P&L Line
 fig.add_trace(
     go.Scatter(
-        x=s_range,
-        y=total_payoff,
+        x=price_range,
+        y=net_pnl_values,
         mode="lines",
-        name="Payoff at Expiration",
-        line=dict(color="#1f77b4", width=3),
-        hovertemplate="Stock Price: %{x:$.2f}<br>P/L: %{y:$.2f}<extra></extra>",
+        name="Net P&L (After Fees)",
+        line=dict(color="#00CC96", width=3),
     )
 )
 
-# Zero Line
-fig.add_hline(y=0, line_dash="solid", line_color="gray", opacity=0.5)
-
 # Reference Lines
+fig.add_hline(y=0, line_dash="solid", line_color="gray", opacity=0.5)
 fig.add_vline(
-    x=stock_price,
+    x=current_price,
     line_dash="dot",
-    line_color="#2b5c8f",
-    annotation_text=f"Stock Price: ${stock_price:.2f}",
+    line_color="#636EFA",
+    annotation_text=f"Current: ${current_price:.2f}",
     annotation_position="top left",
 )
-
 fig.add_vline(
     x=strike_price,
-    line_dash="dash",
-    line_color="#d9534f",
+    line_dash="dot",
+    line_color="#FFA15A",
     annotation_text=f"Strike: ${strike_price:.2f}",
-    annotation_position="bottom right",
+    annotation_position="top right",
 )
-
 fig.add_vline(
-    x=breakeven,
-    line_dash="dash",
-    line_color="#5cb85c",
-    annotation_text=f"Breakeven: ${breakeven:.2f}",
+    x=net_breakeven,
+    line_dash="dot",
+    line_color="#EF553B",
+    annotation_text=f"Net Breakeven: ${net_breakeven:.2f}",
     annotation_position="bottom left",
 )
 
 fig.update_layout(
-    title="Short Put Payoff Curve at Expiration",
-    xaxis_title="Underlying Stock Price ($)",
-    yaxis_title="Profit / Loss ($)",
-    hovermode="x unified",
-    template="plotly_white",
-    height=520,
+    title="Net Profit / Loss ($) vs. Stock Price at Expiration",
+    xaxis_title="Stock Price at Expiration ($)",
+    yaxis_title="Net Profit / Loss ($)",
+    template="plotly_dark",
+    height=450,
 )
 
 st.plotly_chart(fig, use_container_width=True)
 
-# ---------------------------------------------------------
-# Summary Table
-# ---------------------------------------------------------
-st.markdown("### 📊 Trade Summary & Risk Breakdown")
+st.divider()
 
-summary_df = pd.DataFrame(
-    {
-        "Parameter / Metric": [
-            "Current Stock Price",
-            "Strike Price",
-            "Premium Received (per share)",
-            "Days to Expiration (DTE)",
-            "Contracts Traded",
-            "Breakeven Price",
-            "Maximum Profit Potential",
-            "Max Loss Potential (Assumes Stock to $0)",
-            "Total Cash Collateral Reserved",
-            "Return on Collateral (ROC)",
-            "Annualized Return on Collateral (Annualized ROC)",
-        ],
-        "Value": [
-            f"${stock_price:.2f}",
-            f"${strike_price:.2f}",
-            f"${premium:.2f}",
-            f"{dte} days",
-            f"{num_contracts}",
-            f"${breakeven:.2f}",
-            f"${max_profit:,.2f}",
-            f"${max_risk_net:,.2f}",
-            f"${cash_collateral:,.2f}",
-            f"{roc:.2f}%",
-            f"{annualized_roc:.2f}%",
-        ],
-    }
-)
+# Trade Summary & CSV Log Export
+st.subheader("3. Trade Log & Export Summary")
 
-st.table(summary_df)
+summary_data = {
+    "Metric / Parameter": [
+        "Selected Ticker Symbol",
+        "Current Stock Price",
+        "Strike Price",
+        "Premium Collected (per share)",
+        "Days to Expiration (DTE)",
+        "Contract Count",
+        "Required Collateral",
+        "Gross Upfront Income",
+        "Total Broker Commissions",
+        "Net Upfront Income",
+        "Gross Annualized Return (AROC)",
+        "Net Annualized Return (AROC)",
+        "Net Breakeven Price",
+        "Downside Safety Buffer",
+    ],
+    "Value": [
+        selected_symbol,
+        f"${current_price:.2f}",
+        f"${strike_price:.2f}",
+        f"${premium:.2f}",
+        f"{dte} days",
+        f"{contract_count}",
+        f"${collateral:,.2f}",
+        f"${gross_income:,.2f}",
+        f"${total_commissions:.2f}",
+        f"${net_income:,.2f}",
+        f"{gross_aroc:.2f}%",
+        f"{net_aroc:.2f}%",
+        f"${net_breakeven:.2f}",
+        f"{downside_buffer:.2f}%",
+    ],
+}
+
+summary_df = pd.DataFrame(summary_data)
+
+col_tbl, col_dl = st.columns([3, 1])
+
+with col_tbl:
+    st.table(summary_df)
+
+with col_dl:
+    st.markdown("### Export Trade Data")
+    st.write(
+        "Download this trade setup as a clean CSV file to track your portfolio or backtest history."
+    )
+
+    csv_data = summary_df.to_csv(index=False).encode("utf-8")
+
+    st.download_button(
+        label="📥 Download CSV Summary",
+        data=csv_data,
+        file_name=f"short_put_{selected_symbol}_{dte}DTE.csv",
+        mime="text/csv",
+    )
