@@ -12,7 +12,7 @@ st.set_page_config(
 
 # Google Analytics 4 Tracking Code
 st.html("""
-    <script async src="https://www.googletagmanager.com/gtag/js?id=YOUR_GA4_ID"></script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-H7L758ZHC5"></script>
     <script>
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
