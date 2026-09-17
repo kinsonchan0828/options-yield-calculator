@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import requests
 import streamlit as st
+st.html(<meta name="google-site-verification" content="SzsA1uA0Y2rntdUDmID_C_s2CHQR_fhhJ0VOsH7MxhM" />)
 import yfinance as yf
 
 # Page Configuration
