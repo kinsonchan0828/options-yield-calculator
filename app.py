@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 import yfinance as yf
 
 # Page Configuration (Must be first Streamlit command)
@@ -10,18 +11,23 @@ st.set_page_config(
     page_title="Options Yield & Income Calculator", page_icon="📈", layout="wide"
 )
 
-# Google Analytics 4 Tracking Code
-st.html("""
-    <!-- Google tag (gtag.js) -->
+# Google Analytics 4 (Iframe Parent Location Fix)
+components.html(
+    """
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-H7L758ZHC5"></script>
     <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-
-      gtag('config', 'G-H7L758ZHC5');
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-H7L758ZHC5', {
+            'page_location': window.parent.location.href,
+            'page_path': window.parent.location.pathname
+        });
     </script>
-""")
+    """,
+    height=0,
+    width=0,
+)
 # Currency Symbol Map
 CURRENCY_MAP = {
     "USD": "$",
