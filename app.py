@@ -12,12 +12,14 @@ st.set_page_config(
 
 # Google Analytics 4 Tracking Code
 st.html("""
+    <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-H7L758ZHC5"></script>
     <script>
-        window.dataLayer = window.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
-        gtag('js', new Date());
-        gtag('config', 'G-H7L758ZHC5');
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-H7L758ZHC5');
     </script>
 """)
 # Currency Symbol Map
