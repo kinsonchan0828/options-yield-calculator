@@ -11,16 +11,24 @@ st.set_page_config(
     page_title="Options Yield & Income Calculator", page_icon="📈", layout="wide"
 )
 
-# Google Analytics 4 (Iframe Parent Location Fix)
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-H7L758ZHC5"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
+# Google Analytics 4 Tag
+components.html(
+    """
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-H7L758ZHC5"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
 
-  gtag('config', 'G-H7L758ZHC5');
-</script>
+      gtag('config', 'G-H7L758ZHC5', {
+          'page_location': window.parent.location.href
+      });
+    </script>
+    """,
+    height=0,
+    width=0,
+)
 # Currency Symbol Map
 CURRENCY_MAP = {
     "USD": "$",
