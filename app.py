@@ -12,22 +12,15 @@ st.set_page_config(
 )
 
 # Google Analytics 4 (Iframe Parent Location Fix)
-components.html(
-    """
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-H7L758ZHC5"></script>
-    <script>
-        window.dataLayer = window.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
-        gtag('js', new Date());
-        gtag('config', 'G-H7L758ZHC5', {
-            'page_location': window.parent.location.href,
-            'page_path': window.parent.location.pathname
-        });
-    </script>
-    """,
-    height=0,
-    width=0,
-)
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-H7L758ZHC5"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-H7L758ZHC5');
+</script>
 # Currency Symbol Map
 CURRENCY_MAP = {
     "USD": "$",
