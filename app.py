@@ -3,13 +3,15 @@ import pandas as pd
 import plotly.graph_objects as go
 import requests
 import streamlit as st
-st.html(<meta name="google-site-verification" content="SzsA1uA0Y2rntdUDmID_C_s2CHQR_fhhJ0VOsH7MxhM" />)
 import yfinance as yf
 
 # Page Configuration
 st.set_page_config(
     page_title="Options Yield & Income Calculator", page_icon="📈", layout="wide"
 )
+
+# Google Site Verification Meta Tag
+st.html('<meta name="google-site-verification" content="SzsA1uA0Y2rntdUDmID_C_s2CHQR_fhhJ0VOsH7MxhM" />')
 
 # Currency Symbol Map
 CURRENCY_MAP = {
