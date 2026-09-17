@@ -411,3 +411,42 @@ with col_dl:
         file_name=f"short_put_{selected_symbol}_{dte}DTE_{stock_currency}.csv",
         mime="text/csv",
     )
+    st.divider()
+
+# Educational & SEO Content Section
+st.markdown("""
+## 📚 Cash-Secured Put (CSP) Yield & Ticker Guide
+
+### 1. How Cash-Secured Put (CSP) Net Yield is Calculated
+A Cash-Secured Put involves selling an out-of-the-money put option while reserving cash equal to $ \text{Strike Price} \times 100 \times \text{Contracts} $. 
+
+To measure your true risk-adjusted return, **ThetaYield** calculates both Gross and Net Annualized Return on Capital (AROC):
+
+* **Net Premium Income:** $\text{Gross Premium} - \text{Total Broker Commissions}$
+* **Net AROC (%):** $\left(\frac{\text{Net Income}}{\text{Required Collateral}}\right) \times \left(\frac{365}{\text{Days to Expiration}}\right) \times 100$
+* **Net Breakeven Price:** $\text{Strike Price} - \left(\frac{\text{Net Income}}{100 \times \text{Contracts}}\right)$
+* **Downside Safety Buffer (%):** $\left(\frac{\text{Current Stock Price} - \text{Net Breakeven}}{\text{Current Stock Price}}\right) \times 100$
+
+---
+
+### 2. Global Ticker Search & Formatting Rules
+Our live search engine automatically fetches stock prices and exchange currencies powered by Yahoo Finance. Depending on the market, use the following ticker conventions:
+
+* **US Stocks & ETFs:** Enter standard symbols directly without suffixes.
+  * Example: **`NVDA`** (NVIDIA), **`AAPL`** (Apple), **`TSLA`** (Tesla), **`VOO`** (Vanguard S&P 500 ETF).
+* **Hong Kong (HKEX) Stocks:** Append **`.HK`** after the 4-digit numeric stock code.
+  * Example: **`0700.HK`** (Tencent Holdings), **`9988.HK`** (Alibaba Group).
+* **Japan (TSE) Stocks:** Append **`.T`** after the 4-digit numeric ticker code.
+  * Example: **`7203.T`** (Toyota Motor), **`9984.T`** (SoftBank Group).
+* **Other International Markets:** If you are unsure of a stock's exchange suffix, search the company name directly in the search bar above or check the symbol on [Yahoo Finance Search](https://finance.yahoo.com).
+
+---
+
+### 3. Why Commission & FX Drag Matter
+Options sellers often focus purely on upfront premium yields while ignoring hidden transaction costs. 
+
+1. **Broker Friction:** Paying $0.65 to $1.50 per contract on low-premium options ($0.10–$0.30) can wipe out **5% to 15%** of your total trade profit upon entry and exit.
+2. **Foreign Exchange (FX) Drag:** When selling US options in a foreign account currency (or vice-versa), currency conversion markups impact your bottom-line breakeven price. 
+
+Factoring in net commissions ensures you only sell options that compensate for assignment risk and trading costs.
+""")
