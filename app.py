@@ -5,13 +5,21 @@ import requests
 import streamlit as st
 import yfinance as yf
 
-# Page Configuration
+# Page Configuration (Must be first Streamlit command)
 st.set_page_config(
     page_title="Options Yield & Income Calculator", page_icon="📈", layout="wide"
 )
 
-# Google Site Verification Meta Tag
-st.html('<meta name="google-site-verification" content="SzsA1uA0Y2rntdUDmID_C_s2CHQR_fhhJ0VOsH7MxhM" />')
+# Google Site Verification Meta Tag (Head Injection + Body Fallback)
+st.html("""
+    <script>
+        var meta = document.createElement('meta');
+        meta.name = 'google-site-verification';
+        meta.content = 'SzsA1uA0Y2rntdUDmID_C_s2CHQR_fhhJ0VOsH7MxhM';
+        document.getElementsByTagName('head')[0].appendChild(meta);
+    </script>
+    <meta name="google-site-verification" content="SzsA1uA0Y2rntdUDmID_C_s2CHQR_fhhJ0VOsH7MxhM" />
+""")
 
 # Currency Symbol Map
 CURRENCY_MAP = {
